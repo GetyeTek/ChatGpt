@@ -110,12 +110,18 @@ class MainActivity : ComponentActivity() {
                         Text("TERMINAL OUTPUT", color = Color.Red, fontWeight = FontWeight.Bold)
                         Row {
                             IconButton(onClick = {
-                                val logContent = DebugLogger.getFullLog()
+                                var logContent = DebugLogger.getFullLog()
                                 try {
                                     if (logContent.isBlank()) {
                                         DebugLogger.log("CLIPBOARD", "ABORT: No log content to copy.")
-                                        android.widget.Toast.makeText(appContext, "Nothing to copy", android.widget.Toast.LENGTH_SHORT).show()
                                         return@IconButton
+                                    }
+
+                                    // Binder limit is 1MB. We cap at ~800KB to be safe.
+                                    val maxChars = 800_000 
+                                    if (logContent.length > maxChars) {
+                                        DebugLogger.log("CLIPBOARD", "TRUNCATING: Log size (${logContent.length}) exceeds 1MB Binder limit.")
+                                        logContent = "[LOG TRUNCATED FOR SIZE]\n" + logContent.take(maxChars)
                                     }
                                     
                                     val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -124,13 +130,12 @@ class MainActivity : ComponentActivity() {
                                     
                                     DebugLogger.log("CLIPBOARD", "SUCCESS: ${logContent.length} chars written to system buffer.")
                                     
-                                    // Android 13+ has its own copy confirmation UI
                                     if (android.os.Build.VERSION.SDK_INT < 33) {
-                                        android.widget.Toast.makeText(appContext, "Logs copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.widget.Toast.makeText(appContext, "Logs copied", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 } catch (e: Exception) {
-                                    DebugLogger.log("CLIPBOARD", "FATAL ERROR: ${e.message}")
-                                    android.widget.Toast.makeText(appContext, "Copy failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                    DebugLogger.log("CLIPBOARD", "SYSTEM REJECTED DATA: ${e.message}")
+                                    android.widget.Toast.makeText(appContext, "System rejected copy: Data too large", android.widget.Toast.LENGTH_LONG).show()
                                 }
                             }) {
                                 Icon(Icons.Filled.ContentCopy, "Copy", tint = Color.Cyan)
