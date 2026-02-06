@@ -9,6 +9,8 @@ class AutoReadService : AccessibilityService() {
 
     private val processedFingerprints = LinkedHashSet<Int>()
     private var lastClickTime: Long = 0
+    private var lastScrollTime: Long = 0
+    private var lastScrollHash: Int = 0
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val rootNode = rootInActiveWindow ?: return
@@ -28,7 +30,10 @@ class AutoReadService : AccessibilityService() {
             return
         }
 
-        findAndTriggerReadAloud(rootNode)
+        val found = findAndTriggerReadAloud(rootNode)
+        if (!found) {
+            attemptScroll(rootNode)
+        }
     }
 
     private fun isStillGenerating(root: AccessibilityNodeInfo): Boolean {
@@ -45,11 +50,11 @@ class AutoReadService : AccessibilityService() {
         return false
     }
 
-    private fun findAndTriggerReadAloud(rootNode: AccessibilityNodeInfo) {
+    private fun findAndTriggerReadAloud(rootNode: AccessibilityNodeInfo): Boolean {
         val clickableNodes = mutableListOf<AccessibilityNodeInfo>()
         findAllReadAloudNodes(rootNode, clickableNodes)
 
-        if (clickableNodes.isEmpty()) return
+        if (clickableNodes.isEmpty()) return false
 
         // Get the bottom-most button
         val targetNode = clickableNodes.maxByOrNull { 
@@ -86,6 +91,37 @@ class AutoReadService : AccessibilityService() {
         } else {
             DebugLogger.log("ACTION", "FAILURE: System REJECTED click for Hash: $fingerprint")
         }
+        return true
+    }
+
+    private fun attemptScroll(root: AccessibilityNodeInfo) {
+        val now = System.currentTimeMillis()
+        if (now - lastScrollTime < 1200) return
+
+        val currentUIHash = collectAllTextFromNode(root).hashCode()
+        if (currentUIHash == lastScrollHash) {
+            // We haven't moved since last scroll, likely reached the end
+            return
+        }
+
+        val scrollableNode = findScrollableNode(root)
+        if (scrollableNode != null) {
+            val success = scrollableNode.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            if (success) {
+                lastScrollTime = now
+                lastScrollHash = currentUIHash
+                DebugLogger.log("SCROLL", "Button not visible. Scrolling down to reveal...")
+            }
+        }
+    }
+
+    private fun findScrollableNode(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (node.isScrollable) return node
+        for (i in 0 until node.childCount) {
+            val found = findScrollableNode(node.getChild(i) ?: continue)
+            if (found != null) return found
+        }
+        return null
     }
 
     private val VOICE_KEYWORDS = arrayOf("read aloud", "speak", "listen", "voice", "audio", "playback")
