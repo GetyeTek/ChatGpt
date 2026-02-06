@@ -12,7 +12,7 @@ object DebugLogger {
         val time = timeFormat.format(Date())
         // Add to top of list
         logs.add(0, "[$time] $tag: $message")
-        if (logs.size > 500) logs.removeAt(logs.size - 1)
+        if (logs.size > 100) logs.removeAt(logs.size - 1)
     }
 
     fun getFullLog(): String = logs.joinToString("\n")
