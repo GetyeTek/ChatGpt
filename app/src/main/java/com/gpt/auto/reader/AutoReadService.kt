@@ -48,13 +48,17 @@ class AutoReadService : AccessibilityService() {
         }
     }
 
-    private fun findAllReadAloudNodes(node: AccessibilityNodeInfo, list: MutableList<AccessibilityNodeInfo>) {
-        val description = node.contentDescription?.toString() ?: ""
-        val resId = node.viewIdResourceName ?: ""
+    private val VOICE_KEYWORDS = arrayOf("read", "aloud", "speak", "listen", "voice", "audio", "playback")
 
-        // Match by label OR by specific Resource ID if description fails
-        if (description.contains("Read Aloud", ignoreCase = true) || 
-            resId.contains("read_aloud_button", ignoreCase = true)) {
+    private fun findAllReadAloudNodes(node: AccessibilityNodeInfo, list: MutableList<AccessibilityNodeInfo>) {
+        val description = node.contentDescription?.toString()?.lowercase() ?: ""
+        val resId = node.viewIdResourceName?.lowercase() ?: ""
+
+        // Fuzzy Match: Check if the description contains ANY of our voice keywords
+        val isVoiceMatch = VOICE_KEYWORDS.any { description.contains(it) }
+        val isIdMatch = resId.contains("read") || resId.contains("audio") || resId.contains("speak")
+
+        if ((isVoiceMatch || isIdMatch) && node.isClickable) {
             list.add(node)
         }
 
@@ -64,15 +68,36 @@ class AutoReadService : AccessibilityService() {
         }
     }
 
-    private fun findSiblingText(parent: AccessibilityNodeInfo?): String {
-        if (parent == null) return ""
-        // Simple logic: the message text is usually a sibling of the read aloud button
-        for (i in 0 until parent.childCount) {
-            val child = parent.getChild(i) ?: continue
-            val text = child.text?.toString()
-            if (!text.isNullOrBlank()) return text
+    private fun findSiblingText(buttonNode: AccessibilityNodeInfo?): String {
+        var current = buttonNode
+        // Strategy: Move up the tree to find the common container for the message
+        // Usually, the message text and buttons are within 3 levels of each other
+        repeat(3) {
+            current = current?.parent
+            val text = findTextInHierarchy(current)
+            if (text.isNotBlank()) return text
         }
         return ""
+    }
+
+    private fun findTextInHierarchy(node: AccessibilityNodeInfo?): String {
+        if (node == null) return ""
+        
+        // If this node has text, and it's not a button label, return it
+        val text = node.text?.toString()
+        if (!text.isNullOrBlank() && node.classNamesWithoutPackage() != "android.widget.Button") {
+            return text
+        }
+
+        for (i in 0 until node.childCount) {
+            val found = findTextInHierarchy(node.getChild(i))
+            if (found.isNotBlank()) return found
+        }
+        return ""
+    }
+
+    private fun AccessibilityNodeInfo.classNamesWithoutPackage(): String {
+        return this.className?.toString()?.substringAfterLast('.') ?: ""
     }
 
     override fun onInterrupt() {}
