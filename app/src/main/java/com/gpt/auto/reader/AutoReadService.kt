@@ -7,18 +7,37 @@ import android.util.Log
 
 class AutoReadService : AccessibilityService() {
 
-    private var lastProcessedText: String = ""
+    private val processedFingerprints = LinkedHashSet<Int>()
     private var lastClickTime: Long = 0
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        // Only scan when the UI changes within ChatGPT
         val rootNode = rootInActiveWindow ?: return
 
-        // Throttling: Don't scan more than once every 1.5 seconds to save battery
+        // 1. Check if ChatGPT is still "typing" (Stop button is visible)
+        if (isStillGenerating(rootNode)) return
+
+        // 2. Throttling
         val now = System.currentTimeMillis()
-        if (now - lastClickTime < 1500) return
+        if (now - lastClickTime < 2000) return
 
         findAndTriggerReadAloud(rootNode)
+    }
+
+    private fun isStillGenerating(root: AccessibilityNodeInfo): Boolean {
+        // Look for the "Stop" button description
+        val stopNodes = root.findAccessibilityNodeInfosByViewId("com.openai.chatgpt:id/stop_generating_button")
+        if (stopNodes.isNotEmpty()) return true
+        
+        // Fallback fuzzy search for "Stop"
+        return findNodeByDescription(root, "Stop")
+    }
+
+    private fun findNodeByDescription(node: AccessibilityNodeInfo, query: String): Boolean {
+        if (node.contentDescription?.toString()?.contains(query, ignoreCase = true) == true) return true
+        for (i in 0 until node.childCount) {
+            if (findNodeByDescription(node.getChild(i) ?: continue, query)) return true
+        }
+        return false
     }
 
     private fun findAndTriggerReadAloud(rootNode: AccessibilityNodeInfo) {
@@ -38,12 +57,20 @@ class AutoReadService : AccessibilityService() {
         val parent = targetNode.parent
         val messageText = findSiblingText(parent)
 
-        if (messageText != lastProcessedText && messageText.isNotBlank()) {
+        val fingerprint = messageText.hashCode()
+        if (!processedFingerprints.contains(fingerprint) && messageText.isNotBlank()) {
             if (targetNode.isClickable) {
                 targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                lastProcessedText = messageText
+                
+                // Add to history and keep only last 10 entries
+                processedFingerprints.add(fingerprint)
+                if (processedFingerprints.size > 10) {
+                    val first = processedFingerprints.iterator().next()
+                    processedFingerprints.remove(first)
+                }
+
                 lastClickTime = System.currentTimeMillis()
-                Log.d("AutoReader", "Triggered latest button for text: ${messageText.take(20)}...")
+                Log.d("AutoReader", "Triggered click for new message hash: $fingerprint")
             }
         }
     }
