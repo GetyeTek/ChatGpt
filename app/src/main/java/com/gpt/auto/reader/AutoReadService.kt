@@ -39,9 +39,12 @@ class AutoReadService : AccessibilityService() {
         val text = node.text?.toString() ?: "null"
         val id = node.viewIdResourceName ?: "null"
         val className = node.className?.toString()?.substringAfterLast('.') ?: "unknown"
-        val clickable = if (node.isClickable) "CLK: true" else "CLK: false"
+        val clickable = if (node.isClickable) "C" else "_"
+        val visible = if (node.isVisibleToUser) "V" else "_"
+        val enabled = if (node.isEnabled) "E" else "_"
+        val focusable = if (node.isFocusable) "F" else "_"
         
-        sb.append("$indent[$className] $clickable | ID: $id | TXT: $text | DESC: $desc\n")
+        sb.append("$indent[$className] [$clickable$visible$enabled$focusable] ID: $id | TXT: $text | DESC: $desc\n")
 
         for (i in 0 until node.childCount) {
             recursiveDump(node.getChild(i), sb, depth + 1)
@@ -68,8 +71,8 @@ class AutoReadService : AccessibilityService() {
     private fun findAndTriggerReadAloud(rootNode: AccessibilityNodeInfo) {
         val clickableNodes = mutableListOf<AccessibilityNodeInfo>()
         
-        // 1. Collect all potential "Read Aloud" buttons on screen
         findAllReadAloudNodes(rootNode, clickableNodes)
+        DebugLogger.log("TRACE", "Found ${clickableNodes.size} voice-related nodes on screen.")
 
         // 2. We want the NEWEST message, which is at the bottom (highest Y coordinate)
         val targetNode = clickableNodes.maxByOrNull { 
@@ -83,19 +86,24 @@ class AutoReadService : AccessibilityService() {
         val messageText = findSiblingText(parent)
 
         val fingerprint = messageText.hashCode()
+        DebugLogger.log("TRACE", "Testing Message: [${messageText.take(30)}...] Hash: $fingerprint")
+
         if (!processedFingerprints.contains(fingerprint) && messageText.isNotBlank()) {
             if (targetNode.isClickable) {
-                targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                val success = targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 
-                // Add to history and keep only last 10 entries
-                processedFingerprints.add(fingerprint)
-                if (processedFingerprints.size > 10) {
-                    val first = processedFingerprints.iterator().next()
-                    processedFingerprints.remove(first)
+                if (success) {
+                    processedFingerprints.add(fingerprint)
+                    if (processedFingerprints.size > 10) {
+                        val first = processedFingerprints.iterator().next()
+                        processedFingerprints.remove(first)
+                    }
+                    lastClickTime = System.currentTimeMillis()
+                    DebugLogger.log("ACTION", "SUCCESS: System accepted click for Hash: $fingerprint")
+                } else {
+                    DebugLogger.log("ACTION", "FAILURE: System REJECTED click action for Hash: $fingerprint")
                 }
-
-                lastClickTime = System.currentTimeMillis()
-                DebugLogger.log("ACTION", "SUCCESS: Tapped Read Aloud. Hash: $fingerprint")
+            }
             } else {
                 DebugLogger.log("DECISION", "Target node found but NOT clickable.")
             }
