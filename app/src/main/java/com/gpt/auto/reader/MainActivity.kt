@@ -94,6 +94,8 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun LogModal(onDismiss: () -> Unit) {
         val context = androidx.compose.ui.platform.LocalContext.current
+        val appContext = context.applicationContext
+
         androidx.compose.ui.window.Dialog(
             onDismissRequest = onDismiss,
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
@@ -108,14 +110,35 @@ class MainActivity : ComponentActivity() {
                         Text("TERMINAL OUTPUT", color = Color.Red, fontWeight = FontWeight.Bold)
                         Row {
                             IconButton(onClick = {
-                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val data = ClipData.newPlainText("AutoReaderLogs", DebugLogger.getFullLog())
-                                cm.setPrimaryClip(data)
-                                android.widget.Toast.makeText(context, "Logs copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                val logContent = DebugLogger.getFullLog()
+                                try {
+                                    if (logContent.isBlank()) {
+                                        DebugLogger.log("CLIPBOARD", "ABORT: No log content to copy.")
+                                        android.widget.Toast.makeText(appContext, "Nothing to copy", android.widget.Toast.LENGTH_SHORT).show()
+                                        return@IconButton
+                                    }
+                                    
+                                    val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("AutoReaderLogs", logContent)
+                                    cm.setPrimaryClip(clip)
+                                    
+                                    DebugLogger.log("CLIPBOARD", "SUCCESS: ${logContent.length} chars written to system buffer.")
+                                    
+                                    // Android 13+ has its own copy confirmation UI
+                                    if (android.os.Build.VERSION.SDK_INT < 33) {
+                                        android.widget.Toast.makeText(appContext, "Logs copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    DebugLogger.log("CLIPBOARD", "FATAL ERROR: ${e.message}")
+                                    android.widget.Toast.makeText(appContext, "Copy failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                }
                             }) {
                                 Icon(Icons.Filled.ContentCopy, "Copy", tint = Color.Cyan)
                             }
-                            IconButton(onClick = { DebugLogger.clear() }) {
+                            IconButton(onClick = { 
+                                DebugLogger.clear()
+                                DebugLogger.log("SYSTEM", "User cleared logs.")
+                            }) {
                                 Icon(Icons.Filled.Delete, "Clear", tint = Color.Gray)
                             }
                             TextButton(onClick = onDismiss) {
