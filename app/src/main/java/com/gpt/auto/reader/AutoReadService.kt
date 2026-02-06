@@ -89,19 +89,21 @@ class AutoReadService : AccessibilityService() {
 
     private fun findAllReadAloudNodes(node: AccessibilityNodeInfo, list: MutableList<AccessibilityNodeInfo>) {
         val description = node.contentDescription?.toString()?.lowercase() ?: ""
+        val text = node.text?.toString()?.lowercase() ?: ""
         val resId = node.viewIdResourceName?.lowercase() ?: ""
 
-        val isVoiceMatch = VOICE_KEYWORDS.any { description.contains(it) }
+        val isVoiceMatch = VOICE_KEYWORDS.any { description.contains(it) || text.contains(it) }
         val isIdMatch = resId.contains("read") || resId.contains("audio") || resId.contains("speak")
 
         if (isVoiceMatch || isIdMatch) {
-            if (node.isClickable) {
-                list.add(node)
-            } else {
-                for (i in 0 until node.childCount) {
-                    val child = node.getChild(i) ?: continue
-                    if (child.isClickable) list.add(child)
-                }
+            // Find the nearest clickable ancestor or the node itself
+            var target: AccessibilityNodeInfo? = node
+            while (target != null && !target.isClickable) {
+                target = target.parent
+            }
+            
+            if (target != null && target.isClickable && !list.contains(target)) {
+                list.add(target)
             }
         }
 
