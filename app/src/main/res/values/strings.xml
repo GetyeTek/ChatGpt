@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">GPT Auto Reader</string>
+    <string name="accessibility_desc">Automatically triggers the Read Aloud button in ChatGPT when a new message arrives.</string>
+</resources>
