@@ -21,30 +21,46 @@ class AutoReadService : AccessibilityService() {
         findAndTriggerReadAloud(rootNode)
     }
 
-    private fun findAndTriggerReadAloud(node: AccessibilityNodeInfo) {
-        // ChatGPT uses Content Description for its icons.
-        // We look for the one labeled "Read Aloud".
-        val description = node.contentDescription?.toString() ?: ""
+    private fun findAndTriggerReadAloud(rootNode: AccessibilityNodeInfo) {
+        val clickableNodes = mutableListOf<AccessibilityNodeInfo>()
         
-        if (description.contains("Read Aloud", ignoreCase = true)) {
-            // To avoid repeating the same message, we look at the message text near the button
-            val parent = node.parent
-            val messageText = findSiblingText(parent)
+        // 1. Collect all potential "Read Aloud" buttons on screen
+        findAllReadAloudNodes(rootNode, clickableNodes)
 
-            if (messageText != lastProcessedText && messageText.isNotBlank()) {
-                if (node.isClickable) {
-                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                    lastProcessedText = messageText
-                    lastClickTime = System.currentTimeMillis()
-                    Log.d("AutoReader", "Triggered Read Aloud for: ${messageText.take(20)}...")
-                }
+        // 2. We want the NEWEST message, which is at the bottom (highest Y coordinate)
+        val targetNode = clickableNodes.maxByOrNull { 
+            val rect = android.graphics.Rect()
+            it.getBoundsInScreen(rect)
+            rect.bottom 
+        } ?: return
+
+        // 3. Prevent Duplicate Clicks
+        val parent = targetNode.parent
+        val messageText = findSiblingText(parent)
+
+        if (messageText != lastProcessedText && messageText.isNotBlank()) {
+            if (targetNode.isClickable) {
+                targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                lastProcessedText = messageText
+                lastClickTime = System.currentTimeMillis()
+                Log.d("AutoReader", "Triggered latest button for text: ${messageText.take(20)}...")
             }
-            return
+        }
+    }
+
+    private fun findAllReadAloudNodes(node: AccessibilityNodeInfo, list: MutableList<AccessibilityNodeInfo>) {
+        val description = node.contentDescription?.toString() ?: ""
+        val resId = node.viewIdResourceName ?: ""
+
+        // Match by label OR by specific Resource ID if description fails
+        if (description.contains("Read Aloud", ignoreCase = true) || 
+            resId.contains("read_aloud_button", ignoreCase = true)) {
+            list.add(node)
         }
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            findAndTriggerReadAloud(child)
+            findAllReadAloudNodes(child, list)
         }
     }
 
