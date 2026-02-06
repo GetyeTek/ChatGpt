@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="Reader Settings">
+        <CheckBoxPreference
+            android:key="auto_click_enabled"
+            android:title="Enable Auto-Click"
+            android:summary="Automatically tap the Read Aloud button"
+            android:defaultValue="true" />
+        <SeekBarPreference
+            android:key="click_cooldown"
+            android:title="Click Cooldown (ms)"
+            android:summary="Time to wait between scans"
+            android:defaultValue="1500"
+            android:max="5000" />
+    </PreferenceCategory>
+</PreferenceScreen>
