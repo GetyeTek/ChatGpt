@@ -7,7 +7,7 @@ import android.util.Log
 
 class AutoReadService : AccessibilityService() {
 
-    private val processedFingerprints = LinkedHashSet<Int>()
+    private val processedSignatures = LinkedHashSet<String>()
     private var lastClickTime: Long = 0
     private var lastScrollTime: Long = 0
     private var lastScrollHash: Int = 0
@@ -64,34 +64,39 @@ class AutoReadService : AccessibilityService() {
         } ?: return
 
         val messageText = findSiblingText(targetNode)
-        val fingerprint = messageText.hashCode()
+        if (messageText.isBlank()) return false
 
-        if (messageText.isBlank()) {
-            DebugLogger.log("TRACE", "Found button but message text is blank. Skipping.")
-            return
+        // Create a robust signature: [Length] + [Start] + [End]
+        val signature = "${messageText.length}_${messageText.take(60)}_${messageText.takeLast(60)}"
+
+        // COORDINATE FILTER: Only accept buttons in the lower half of the screen
+        val rect = android.graphics.Rect()
+        targetNode.getBoundsInScreen(rect)
+        val screenHeight = resources.displayMetrics.heightPixels
+        val isLowerHalf = rect.bottom > (screenHeight * 0.6) // Must be in bottom 40%
+
+        if (!isLowerHalf) {
+            DebugLogger.log("DECISION", "Skip: Button too high on screen (History node)")
+            return false
         }
 
-        DebugLogger.log("TRACE", "Testing Message: [${messageText.take(20)}...] Hash: $fingerprint")
+        DebugLogger.log("TRACE", "Testing Message Signature: [LEN:${messageText.length}]")
 
-        if (processedFingerprints.contains(fingerprint)) {
-            DebugLogger.log("DECISION", "Skip: Hash $fingerprint already processed.")
-            return
+        if (processedSignatures.contains(signature)) {
+            return false
         }
 
         // Execute Click
         val success = targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         if (success) {
-            processedFingerprints.add(fingerprint)
-            if (processedFingerprints.size > 15) {
-                val first = processedFingerprints.iterator().next()
-                processedFingerprints.remove(first)
+            processedSignatures.add(signature)
+            if (processedSignatures.size > 20) {
+                val first = processedSignatures.iterator().next()
+                processedSignatures.remove(first)
             }
             lastClickTime = System.currentTimeMillis()
-            DebugLogger.log("ACTION", "SUCCESS: Tapped Read Aloud for Hash: $fingerprint")
+            DebugLogger.log("ACTION", "SUCCESS: Tapped Read Aloud. Sig: ${messageText.take(20)}...")
         } else {
-            DebugLogger.log("ACTION", "FAILURE: System REJECTED click for Hash: $fingerprint")
-        }
-        return true
     }
 
     private fun attemptScroll(root: AccessibilityNodeInfo) {
