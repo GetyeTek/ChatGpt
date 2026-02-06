@@ -129,12 +129,16 @@ class AutoReadService : AccessibilityService() {
         return null
     }
 
-    private val VOICE_KEYWORDS = arrayOf("read aloud", "speak", "listen", "voice", "audio", "playback")
+    private val VOICE_KEYWORDS = arrayOf("read aloud", "speak", "listen", "audio", "playback")
+    private val BLACKLIST_KEYWORDS = arrayOf("voice conversation", "dictation", "headphones", "keyboard")
 
     private fun findAllReadAloudNodes(node: AccessibilityNodeInfo, list: MutableList<AccessibilityNodeInfo>) {
         val description = node.contentDescription?.toString()?.lowercase() ?: ""
         val text = node.text?.toString()?.lowercase() ?: ""
         val resId = node.viewIdResourceName?.lowercase() ?: ""
+
+        val isBlacklisted = BLACKLIST_KEYWORDS.any { description.contains(it) || text.contains(it) }
+        if (isBlacklisted) return
 
         val isVoiceMatch = VOICE_KEYWORDS.any { description.contains(it) || text.contains(it) }
         val isIdMatch = resId.contains("read") || resId.contains("audio") || resId.contains("speak")
