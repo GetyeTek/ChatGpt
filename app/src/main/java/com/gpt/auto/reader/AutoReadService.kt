@@ -39,8 +39,9 @@ class AutoReadService : AccessibilityService() {
         val text = node.text?.toString() ?: "null"
         val id = node.viewIdResourceName ?: "null"
         val className = node.className?.toString()?.substringAfterLast('.') ?: "unknown"
+        val clickable = if (node.isClickable) "CLK: true" else "CLK: false"
         
-        sb.append("$indent[$className] ID: $id | TXT: $text | DESC: $desc\n")
+        sb.append("$indent[$className] $clickable | ID: $id | TXT: $text | DESC: $desc\n")
 
         for (i in 0 until node.childCount) {
             recursiveDump(node.getChild(i), sb, depth + 1)
@@ -111,12 +112,21 @@ class AutoReadService : AccessibilityService() {
         val description = node.contentDescription?.toString()?.lowercase() ?: ""
         val resId = node.viewIdResourceName?.lowercase() ?: ""
 
-        // Fuzzy Match: Check if the description contains ANY of our voice keywords
         val isVoiceMatch = VOICE_KEYWORDS.any { description.contains(it) }
         val isIdMatch = resId.contains("read") || resId.contains("audio") || resId.contains("speak")
 
-        if ((isVoiceMatch || isIdMatch) && node.isClickable) {
-            list.add(node)
+        if (isVoiceMatch || isIdMatch) {
+            if (node.isClickable) {
+                list.add(node)
+            } else {
+                // Logic for nested buttons: If the container has the description, check children for the button
+                for (i in 0 until node.childCount) {
+                    val child = node.getChild(i) ?: continue
+                    if (child.isClickable || child.className?.contains("Button") == true) {
+                        list.add(child)
+                    }
+                }
+            }
         }
 
         for (i in 0 until node.childCount) {
@@ -138,19 +148,22 @@ class AutoReadService : AccessibilityService() {
     }
 
     private fun findTextInHierarchy(node: AccessibilityNodeInfo?): String {
-        if (node == null) return ""
+        val sb = StringBuilder()
+        collectAllText(node, sb)
+        return sb.toString().trim()
+    }
+
+    private fun collectAllText(node: AccessibilityNodeInfo?, sb: StringBuilder) {
+        if (node == null) return
         
-        // If this node has text, and it's not a button label, return it
         val text = node.text?.toString()
-        if (!text.isNullOrBlank() && node.classNamesWithoutPackage() != "android.widget.Button") {
-            return text
+        if (!text.isNullOrBlank() && node.className?.contains("Button") == false) {
+            sb.append(text).append(" ")
         }
 
         for (i in 0 until node.childCount) {
-            val found = findTextInHierarchy(node.getChild(i))
-            if (found.isNotBlank()) return found
+            collectAllText(node.getChild(i), sb)
         }
-        return ""
     }
 
     private fun AccessibilityNodeInfo.classNamesWithoutPackage(): String {
