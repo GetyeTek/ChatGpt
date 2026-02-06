@@ -22,14 +22,20 @@ android {
         kotlinCompilerExtensionVersion '1.5.14'
     }
 
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            // Use the 'optimize' profile for even smaller size
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // Enabling minification in debug to satisfy the size requirement
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
     }
-    kotlinOptions {
-        jvmTarget = '17'
-    }
-}
 
 dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
