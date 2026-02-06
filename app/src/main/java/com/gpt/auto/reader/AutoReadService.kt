@@ -12,6 +12,9 @@ class AutoReadService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val rootNode = rootInActiveWindow ?: return
+        
+        // LOCKDOWN: Only process if the active window belongs to ChatGPT
+        if (rootNode.packageName != "com.openai.chatgpt") return
 
         val now = System.currentTimeMillis()
         if (now - lastClickTime < 1500) return
@@ -85,7 +88,7 @@ class AutoReadService : AccessibilityService() {
         }
     }
 
-    private val VOICE_KEYWORDS = arrayOf("read", "aloud", "speak", "listen", "voice", "audio", "playback")
+    private val VOICE_KEYWORDS = arrayOf("read aloud", "speak", "listen", "voice", "audio", "playback")
 
     private fun findAllReadAloudNodes(node: AccessibilityNodeInfo, list: MutableList<AccessibilityNodeInfo>) {
         val description = node.contentDescription?.toString()?.lowercase() ?: ""
