@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -63,10 +64,10 @@ class MainActivity : ComponentActivity() {
                                     val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     cm.setPrimaryClip(ClipData.newPlainText("Logs", DebugLogger.getFullLog()))
                                 }) {
-                                    Icon(Icons.Default.ContentCopy, "Copy", tint = Color.Cyan)
+                                    Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = "Copy", tint = Color.Cyan)
                                 }
                                 IconButton(onClick = { DebugLogger.clear() }) {
-                                    Icon(Icons.Default.Delete, "Clear", tint = Color.Gray)
+                                    Icon(imageVector = Icons.Filled.Delete, contentDescription = "Clear", tint = Color.Gray)
                                 }
                             }
                         }
