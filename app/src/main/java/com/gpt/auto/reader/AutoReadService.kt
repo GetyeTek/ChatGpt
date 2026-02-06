@@ -13,14 +13,38 @@ class AutoReadService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val rootNode = rootInActiveWindow ?: return
 
-        // 1. Check if ChatGPT is still "typing" (Stop button is visible)
-        if (isStillGenerating(rootNode)) return
-
-        // 2. Throttling
+        // Throttling for logs - don't spam dump every millisecond
         val now = System.currentTimeMillis()
-        if (now - lastClickTime < 2000) return
+        if (now - lastClickTime < 1000) return
+
+        DebugLogger.log("SCAN", "--- NEW SCAN START ---")
+        
+        // DEBUG: Dump EVERYTHING seen on screen
+        val dumpSb = StringBuilder()
+        recursiveDump(rootNode, dumpSb, 0)
+        DebugLogger.log("UI DUMP", dumpSb.toString())
+
+        if (isStillGenerating(rootNode)) {
+            DebugLogger.log("DECISION", "Aborting: Stop button detected (Still Generating)")
+            return
+        }
 
         findAndTriggerReadAloud(rootNode)
+    }
+
+    private fun recursiveDump(node: AccessibilityNodeInfo?, sb: StringBuilder, depth: Int) {
+        if (node == null) return
+        val indent = "  ".repeat(depth)
+        val desc = node.contentDescription?.toString() ?: "null"
+        val text = node.text?.toString() ?: "null"
+        val id = node.viewIdResourceName ?: "null"
+        val className = node.className?.toString()?.substringAfterLast('.') ?: "unknown"
+        
+        sb.append("$indent[$className] ID: $id | TXT: $text | DESC: $desc\n")
+
+        for (i in 0 until node.childCount) {
+            recursiveDump(node.getChild(i), sb, depth + 1)
+        }
     }
 
     private fun isStillGenerating(root: AccessibilityNodeInfo): Boolean {
@@ -70,8 +94,14 @@ class AutoReadService : AccessibilityService() {
                 }
 
                 lastClickTime = System.currentTimeMillis()
-                Log.d("AutoReader", "Triggered click for new message hash: $fingerprint")
+                DebugLogger.log("ACTION", "SUCCESS: Tapped Read Aloud. Hash: $fingerprint")
+            } else {
+                DebugLogger.log("DECISION", "Target node found but NOT clickable.")
             }
+        } else if (messageText.isBlank()) {
+            DebugLogger.log("DECISION", "Skip: Found button but could not extract sibling text.")
+        } else {
+            DebugLogger.log("DECISION", "Skip: Message hash $fingerprint already processed.")
         }
     }
 
